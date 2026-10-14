@@ -346,7 +346,10 @@ def cmd_stop(a):
         while time.time() < deadline and pid_alive(st.get("sup_pid")):
             time.sleep(0.3)
         st = read_state(sf) or st
-        print(f"{st['port']}: stopped ({st.get('stop_mode', 'unknown')}, rc={st.get('rc')})")
+        mode, rc = st.get("stop_mode", "unknown"), st.get("rc")
+        # 0xC000013A (STATUS_CONTROL_C_EXIT) is the normal exit code after CTRL_BREAK.
+        rc_note = "" if mode == "graceful" or rc is None else f", rc={rc & 0xFFFFFFFF:#x}"
+        print(f"{st['port']}: stopped ({mode}{rc_note})")
         for ext, path in latest_files(st["out_dir"], st["port"], st.get("started")).items():
             print(f"  {ext[1:]:4s} {path}")
         if st.get("stop_mode") == "killed":

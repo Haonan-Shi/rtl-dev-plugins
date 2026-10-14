@@ -51,7 +51,11 @@ path, chip and log COM port, then write it.
 
 - **A COM port has one owner.** The DebugAnalyzer GUI, a serial terminal, VM
   USB passthrough, or a flashing tool holding the port → `start` fails. When
-  log and auto-reset share one port, stop the capture before flashing.
+  log and auto-reset share one port, `stop` before flashing and `start` again
+  after. The board reboots after flashing, so start right away to catch the
+  boot log.
+- A capture that only produces a few-byte `.bin` and no `.log` means the SoC is
+  not emitting logs (not running, stuck in download mode, wrong port/baud).
 - Every run uses a generated ini (copy of the exe's `default.ini`, all trace
   keys replaced), so stale traces from the last GUI session are never used.
   `default.ini` itself is not modified.
