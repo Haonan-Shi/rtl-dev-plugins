@@ -1,6 +1,6 @@
-# claude-plugins
+# rtl-dev-plugins
 
-Claude Code plugin marketplace for embedded development and debugging.
+Claude Code plugins for RTL chip development and debugging.
 
 ## Plugins
 
@@ -11,7 +11,7 @@ Claude Code plugin marketplace for embedded development and debugging.
 ## Install
 
 ```
-/plugin marketplace add Haonan-Shi/claude-plugins
+/plugin marketplace add Haonan-Shi/rtl-dev-plugins
 /plugin install debug-analyzer@haonan-plugins
 ```
 

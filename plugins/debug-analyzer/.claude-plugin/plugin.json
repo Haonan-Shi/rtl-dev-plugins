@@ -5,6 +5,6 @@
   "author": {
     "name": "Haonan Shi"
   },
-  "repository": "https://github.com/Haonan-Shi/claude-plugins",
+  "repository": "https://github.com/Haonan-Shi/rtl-dev-plugins",
   "keywords": ["realtek", "debuganalyzer", "soc-log", "rtl87x3g", "embedded"]
 }
