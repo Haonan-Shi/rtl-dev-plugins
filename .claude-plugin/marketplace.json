@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "debug-analyzer",
-      "description": "Headless serial log capture and offline decoding with Realtek DebugAnalyzer (Windows).",
+      "description": "Flash Realtek SoC firmware with mpcli, then capture and decode logs headlessly with DebugAnalyzer (Windows).",
       "source": "./plugins/debug-analyzer",
       "category": "development"
     }

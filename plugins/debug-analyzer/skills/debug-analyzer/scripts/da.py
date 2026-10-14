@@ -7,12 +7,14 @@ Commands:
   stop   [-p NAME|--port P]   stop a capture gracefully (CTRL_BREAK), kill on timeout
   status                      show captures and their latest log files
   decode [-p NAME] BIN...     offline-decode captured .bin files
+  flash  [-p NAME] [...]      flash SDK images with mpcli (optionally re-capture)
 
 Two layers of configuration:
   ics/<ic>.json         shipped with the plugin; describes where an IC's SDK
-                        keeps its trace files (path templates).
+                        keeps its trace files and flash images (path templates,
+                        flash addresses).
   user config.json      local machine settings per profile: DebugAnalyzer exe,
-                        SDK root, chip variant, serial port, output dir.
+                        SDK root, chip variant, serial ports, output dir.
                         Default: %USERPROFILE%\\.config\\debug-analyzer\\config.json
                         (override with DA_CONFIG). See config.example.json.
 
@@ -49,6 +51,7 @@ STATE_DIR = Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "debug
 
 STOP_TIMEOUT_S = 20
 DECODE_TIMEOUT_S = 600
+FLASH_TIMEOUT_S = 900
 
 # Trace flag -> key in DebugAnalyzer's ini. Every key listed here is cleared in
 # the generated ini, so traces not set by the profile are really unset.
@@ -111,17 +114,23 @@ def load_profile(name):
     variables = dict(ic.get("vars", {}))
     variables.update(prof.get("vars", {}))
     variables["sdk"] = prof.get("sdk", "")
+
+    def expand(tmpl, what):
+        try:
+            return tmpl.format(**variables)
+        except KeyError as e:
+            die(f"profile '{name}': {what} needs variable {e} (set it in 'vars')")
+
     traces = {}
     for flag, tmpl in {**ic.get("traces", {}), **prof.get("traces", {})}.items():
-        if not tmpl:
-            continue
-        try:
-            traces[flag.lstrip("-")] = str(Path(tmpl.format(**variables)))
-        except KeyError as e:
-            die(f"profile '{name}': trace -{flag} needs variable {e} (set it in 'vars')")
+        if tmpl:
+            traces[flag.lstrip("-")] = str(Path(expand(tmpl, f"trace -{flag}")))
     prof["traces"] = traces
     prof.setdefault("baud", ic.get("baud", 2000000))
     prof["ic_description"] = ic.get("description", "")
+    prof["vars"] = variables
+    prof["ic_flash"] = ic.get("flash")
+    prof["expand"] = expand
     return prof
 
 
@@ -218,6 +227,9 @@ def cmd_profiles(_):
         print(f"\n{name}{mark}: {prof['ic_description']}")
         print(f"  exe   [{exe_ok}] {prof.get('exe')}")
         print(f"  port  {prof.get('port')}  baud {prof['baud']}")
+        if prof.get("ic_flash"):
+            print(f"  flash port {prof.get('flash_port')}  reset port {prof.get('reset_port')}  "
+                  f"vars {prof['vars'].get('chip')}/{prof['vars'].get('flash')}/{prof['vars'].get('mic')}")
         print(f"  out   {prof.get('out_dir')}")
         for flag, path in prof["traces"].items():
             ok = "ok" if Path(path).is_file() else "MISSING"
@@ -323,7 +335,7 @@ def find_states(a):
     if not STATE_DIR.is_dir():
         return []
     states = [(p, read_state(p)) for p in sorted(STATE_DIR.glob("*.json"))]
-    states = [(p, s) for p, s in states if s]
+    states = [(p, s) for p, s in states if s and "port" in s]
     if getattr(a, "port", None):
         states = [(p, s) for p, s in states if s["port"] == a.port.upper()]
     if getattr(a, "profile", None):
@@ -412,6 +424,147 @@ def cmd_decode(a):
                 print(f"{ext[1:]:4s} {out}")
 
 
+def parse_kv(items, what):
+    out = {}
+    for item in items or []:
+        if "=" not in item:
+            die(f"{what} expects KEY=VALUE, got '{item}'")
+        k, v = item.split("=", 1)
+        out[k.strip()] = v.strip()
+    return out
+
+
+def resolve_images(prof, layout, overrides, only):
+    """Return [(name, address, path)] for the flash layout, after overrides."""
+    expand = prof["expand"]
+    base = Path(expand(layout["base"], "flash base"))
+    names = {img["name"] for img in layout["images"]}
+    for key in list(overrides) + list(only or []):
+        if key not in names:
+            die(f"unknown image '{key}' (known: {', '.join(sorted(names))})")
+    images, problems = [], []
+    for img in layout["images"]:
+        name = img["name"]
+        if only and name not in only:
+            continue
+        if name in overrides:
+            path = Path(overrides[name])
+            if not path.is_file():
+                problems.append(f"{name}: not a file: {path}")
+                continue
+        else:
+            pattern = expand(img["glob"], f"image {name}")
+            matches = sorted(base.glob(pattern))
+            if not matches:
+                if not img.get("optional"):
+                    problems.append(f"{name}: no match for {base / pattern}")
+                continue
+            if len(matches) > 1:
+                problems.append(f"{name}: {len(matches)} matches for {base / pattern}; "
+                                f"pass --image {name}=<path>")
+                continue
+            path = matches[0]
+        images.append((name, img["address"], path.resolve()))
+    if problems:
+        die("cannot resolve flash images:\n  " + "\n  ".join(problems))
+    return images
+
+
+def stop_captures_on(ports):
+    """Stop running captures holding any of `ports`; return the profiles stopped."""
+    stopped = []
+    for sf, st in find_states(argparse.Namespace(port=None, profile=None)):
+        if st["port"] in ports and pid_alive(st.get("sup_pid")):
+            print(f"{st['port']} is being captured; stopping it before flashing")
+            cmd_stop(argparse.Namespace(port=st["port"], profile=None, all=False))
+            stopped.append(st)
+    return stopped
+
+
+def cmd_flash(a):
+    prof = load_profile(a.profile)
+    prof["vars"].update(parse_kv(a.var, "--var"))
+    flash = prof.get("ic_flash")
+    if not flash:
+        die(f"ic of profile '{prof['name']}' has no 'flash' section")
+    layout_name = prof["vars"].get("flash", "nor")
+    layout = flash.get("layouts", {}).get(layout_name)
+    if not layout:
+        die(f"no flash layout '{layout_name}' (have: {', '.join(flash.get('layouts', {}))})")
+
+    overrides = parse_kv(a.image, "--image")
+    if a.app:
+        overrides["app"] = a.app
+    only = [s.strip() for s in a.only.split(",")] if a.only else None
+    images = resolve_images(prof, layout, overrides, only)
+
+    port = (a.port or prof.get("flash_port") or "").upper()
+    if not port:
+        die("no flash port: pass --port or set 'flash_port' in the profile")
+    reset_port = None if a.no_auto else (a.reset_port or prof.get("reset_port") or "").upper() or None
+    mpcli = Path(prof.get("mpcli") or prof["expand"](flash["mpcli"], "mpcli"))
+    autoreset = Path(prof.get("autoreset") or prof["expand"](flash["autoreset"], "autoreset"))
+    if not mpcli.is_file():
+        die(f"mpcli not found: {mpcli}")
+    if reset_port and not autoreset.is_file():
+        die(f"auto-reset helper not found: {autoreset}")
+
+    print(f"flash {prof['vars'].get('chip')} ({layout_name}) via {port}"
+          + (f", auto-reset on {reset_port}" if reset_port else ", manual reset"))
+    for name, addr, path in images:
+        print(f"  {addr}  {name:14s} {path}")
+    if a.dry_run:
+        return
+
+    held = stop_captures_on({port, reset_port} - {None})
+
+    flash_dir = STATE_DIR / "flash"  # kept apart from the capture state files
+    flash_dir.mkdir(parents=True, exist_ok=True)
+    cfg_path = flash_dir / f"{port}.json"
+    cfg_path.write_text(json.dumps({"mptoolconfig": {
+        "port": port, "baud": "1000000",
+        "images": {"file": [{"address": addr, "path": str(path)} for _, addr, path in images]},
+    }}, indent=2), encoding="utf-8")
+
+    cmd = [str(mpcli), "-c", port, "-M", "5", "-T", flash["ic_type"],
+           "-f", str(cfg_path), "-a", "-r"]
+    # Like the SDK's west runner: the RTS helper runs concurrently and resets the
+    # board into the loader while mpcli is handshaking. mpcli must run from its
+    # own folder to find fw/ and config/.
+    pulser = (subprocess.Popen([sys.executable, str(autoreset), "--port", reset_port])
+              if reset_port else None)
+    started = time.time()
+    output = []
+    try:
+        proc = subprocess.Popen(cmd, cwd=str(mpcli.parent), stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, errors="replace")
+        for line in proc.stdout:
+            output.append(line)
+            if a.verbose or re.search(r"download .* ok!|Success|fail|error|exit", line, re.I):
+                print(line.rstrip())
+        rc = proc.wait(FLASH_TIMEOUT_S)
+    finally:
+        if pulser and pulser.poll() is None:
+            pulser.terminate()
+    ok = rc == 0 and any("MPCLI exit: success" in l for l in output)
+    print(f"flash {'OK' if ok else 'FAILED'} in {time.time() - started:.1f}s (rc={rc})")
+    if not ok:
+        tail = "".join(output[-15:])
+        die(f"mpcli failed; last output:\n{tail}")
+
+    if a.capture or held:
+        # Resume an interrupted capture with its traces, or start a new one.
+        prev = held[0] if held else {}
+        capture_traces = [f"{k}={v}" for k, v in prev.get("traces", {}).items()]
+        app_path = dict((n, p) for n, _, p in images).get("app")
+        if "app" in overrides and app_path and (app_path.parent / "app.trace").is_file():
+            capture_traces.append(f"aa={app_path.parent / 'app.trace'}")
+        capture_traces += list(a.trace or [])
+        cmd_start(argparse.Namespace(
+            profile=prev.get("profile", prof["name"]), port=prev.get("port"), baud=None,
+            out=prev.get("out_dir") if not a.tag else None, tag=a.tag, trace=capture_traces))
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -446,12 +599,31 @@ def main():
     s.add_argument("--out", help="output directory (default: next to the first bin)")
     s.add_argument("--trace", action="append", metavar="FLAG=PATH")
 
+    s = sub.add_parser("flash", help="flash SDK images with mpcli")
+    s.add_argument("-p", "--profile")
+    s.add_argument("--port", help="flash port (default: profile flash_port)")
+    s.add_argument("--reset-port", help="RTS auto-reset port (default: profile reset_port)")
+    s.add_argument("--no-auto", action="store_true",
+                   help="no RTS auto-reset; put the board in download mode by hand")
+    s.add_argument("--var", action="append", metavar="KEY=VALUE",
+                   help="override a layout variable, e.g. mic=2mic or chip=rtl8773gtp")
+    s.add_argument("--app", help="flash this app image instead of the SDK one (e.g. a local app_MP-*.bin)")
+    s.add_argument("--image", action="append", metavar="NAME=PATH",
+                   help="replace any image of the layout (repeatable)")
+    s.add_argument("--only", help="comma-separated image names to flash, e.g. app")
+    s.add_argument("--capture", action="store_true", help="start a capture right after flashing")
+    s.add_argument("--tag", help="capture sub-folder (with --capture)")
+    s.add_argument("--trace", action="append", metavar="FLAG=PATH", help="capture trace override")
+    s.add_argument("--dry-run", action="store_true", help="only print the resolved images")
+    s.add_argument("-v", "--verbose", action="store_true", help="print full mpcli output")
+
     s = sub.add_parser("_supervise")
     s.add_argument("state")
 
     a = ap.parse_args()
     {"profiles": cmd_profiles, "start": cmd_start, "stop": cmd_stop,
-     "status": cmd_status, "decode": cmd_decode, "_supervise": cmd_supervise}[a.cmd](a)
+     "status": cmd_status, "decode": cmd_decode, "flash": cmd_flash,
+     "_supervise": cmd_supervise}[a.cmd](a)
 
 
 if __name__ == "__main__":

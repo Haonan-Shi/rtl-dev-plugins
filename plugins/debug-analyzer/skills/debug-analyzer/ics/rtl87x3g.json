@@ -4,7 +4,8 @@
   "vars": {
     "flash": "nor",
     "chip": "rtl8783gbf",
-    "app": "app_honeygui"
+    "app": "app_honeygui",
+    "mic": "1mic"
   },
   "traces": {
     "ar": "{sdk}/realtek-app/trace/default_bin/{flash}/ROM.trace",
@@ -13,9 +14,36 @@
     "du": "{sdk}/realtek-app/trace/default_bin/{flash}/DSP_SDK_AUDIO.trace",
     "dv": "{sdk}/realtek-app/trace/default_bin/{flash}/DSP_SDK_VOICE.trace"
   },
+  "flash": {
+    "ic_type": "RTL87X3G",
+    "mpcli": "{sdk}/realtek-app/tools/mpcli/Windows/mpcli.exe",
+    "autoreset": "{sdk}/realtek-app/tools/mpcli/flash_autoreset.py",
+    "layouts": {
+      "nor": {
+        "base": "{sdk}/realtek-app/bin/rtl87x3g/default_bin/nor",
+        "images": [
+          { "name": "system_config", "address": "0x70002000", "glob": "{chip}/rcfg/{mic}/SYSTEM_Config_*.bin" },
+          { "name": "boot_patch0",   "address": "0x70004000", "glob": "boot_patch0_MP-*.bin" },
+          { "name": "boot_patch1",   "address": "0x70007000", "glob": "boot_patch1_MP-*.bin" },
+          { "name": "upperstack",    "address": "0x7000A000", "glob": "upperstack_MP-*.bin" },
+          { "name": "ota_header",    "address": "0x70049000", "glob": "{chip}/OTAHeader_Bank0_*.bin" },
+          { "name": "stack_patch",   "address": "0x7004A000", "glob": "stack_patch_bank0_MP-*.bin" },
+          { "name": "sys_patch",     "address": "0x7007C000", "glob": "sys_patch_bank0_MP-*.bin" },
+          { "name": "app",           "address": "0x7009E000", "glob": "{chip}/{app}-*.bin" },
+          { "name": "dsp_sys",       "address": "0x7021E000", "glob": "dsp_sys_image_*.bin" },
+          { "name": "dsp_app",       "address": "0x702BC000", "glob": "dsp_app_image_*.bin" },
+          { "name": "dsp_config",    "address": "0x702FC000", "glob": "{chip}/dsp_config_{mic}/dsp_config_image_*.bin" },
+          { "name": "app_config",    "address": "0x70306000", "glob": "{chip}/rcfg/{mic}/APP_Config_*.bin" },
+          { "name": "vp_data",       "address": "0x70308000", "glob": "{chip}/rcfg/{mic}/VPData_*.bin" },
+          { "name": "user_data1",    "address": "0x704D1000", "glob": "{chip}/root_*.bin", "optional": true }
+        ]
+      }
+    }
+  },
   "notes": [
-    "vars.flash: nor | nand; vars.chip: rtl8773gtp | rtl8783gbf",
-    "For a locally built app, override aa with <app>/bin/app.trace (or the build's fw_out/<chip>/app.trace).",
-    "Patch/upperstack traces (ap, aus, pi, spi) are shipped in the SDK trace package, not the SDK itself; add them under 'traces' in the user profile when available."
+    "vars.flash: nor (nand layout not described yet); vars.chip: rtl8773gtp | rtl8783gbf; vars.mic: 1mic | 2mic",
+    "Addresses follow realtek-app/flashmap/nor/8M|16M flash_map.ini and the app.dts partitions; bank0 only.",
+    "For a locally built app, flash it with --app <app_MP-*.bin>; app.trace next to it is picked up for the capture.",
+    "Patch/upperstack traces (ap, aus, pi, spi) ship in the SDK trace package, not the SDK itself; add them under 'traces' in the user profile."
   ]
 }

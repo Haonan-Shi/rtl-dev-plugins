@@ -6,7 +6,7 @@ Claude Code plugin marketplace for embedded development and debugging.
 
 | Plugin | Description |
 |---|---|
-| [debug-analyzer](plugins/debug-analyzer) | Headless serial log capture and offline decoding with Realtek DebugAnalyzer (Windows) |
+| [debug-analyzer](plugins/debug-analyzer) | Flash with mpcli, capture and decode SoC logs with Realtek DebugAnalyzer (Windows) |
 
 ## Install
 

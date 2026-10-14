@@ -1,7 +1,7 @@
 {
   "name": "debug-analyzer",
-  "version": "0.1.0",
-  "description": "Headless serial log capture and offline decoding with Realtek DebugAnalyzer (Windows).",
+  "version": "0.2.0",
+  "description": "Flash Realtek SoC firmware with mpcli, then capture and decode logs headlessly with DebugAnalyzer (Windows).",
   "author": {
     "name": "Haonan Shi"
   },
