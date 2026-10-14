@@ -1,0 +1,21 @@
+{
+  "description": "RTL87x3G series (RTL8773GTP, RTL8783GBF), Zephyr watch SDK",
+  "baud": 2000000,
+  "vars": {
+    "flash": "nor",
+    "chip": "rtl8783gbf",
+    "app": "app_honeygui"
+  },
+  "traces": {
+    "ar": "{sdk}/realtek-app/trace/default_bin/{flash}/ROM.trace",
+    "aa": "{sdk}/realtek-app/trace/default_bin/{flash}/{chip}/{app}/app.trace",
+    "da": "{sdk}/realtek-app/trace/default_bin/{flash}/DSP_APP.trace",
+    "du": "{sdk}/realtek-app/trace/default_bin/{flash}/DSP_SDK_AUDIO.trace",
+    "dv": "{sdk}/realtek-app/trace/default_bin/{flash}/DSP_SDK_VOICE.trace"
+  },
+  "notes": [
+    "vars.flash: nor | nand; vars.chip: rtl8773gtp | rtl8783gbf",
+    "For a locally built app, override aa with <app>/bin/app.trace (or the build's fw_out/<chip>/app.trace).",
+    "Patch/upperstack traces (ap, aus, pi, spi) are shipped in the SDK trace package, not the SDK itself; add them under 'traces' in the user profile when available."
+  ]
+}

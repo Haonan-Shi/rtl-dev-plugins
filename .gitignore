@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+# Local machine settings are never committed
+config.json
+!config.example.json

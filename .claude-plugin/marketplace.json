@@ -1,0 +1,15 @@
+{
+  "name": "haonan-plugins",
+  "description": "Claude Code plugins for embedded development and debugging.",
+  "owner": {
+    "name": "Haonan Shi"
+  },
+  "plugins": [
+    {
+      "name": "debug-analyzer",
+      "description": "Headless serial log capture and offline decoding with Realtek DebugAnalyzer (Windows).",
+      "source": "./plugins/debug-analyzer",
+      "category": "development"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "default": "rtl87x3g",
+  "profiles": {
+    "rtl87x3g": {
+      "ic": "rtl87x3g",
+      "exe": "D:\\tools\\DebugAnalyzer_v4.1.13.0\\DebugAnalyzer.exe",
+      "sdk": "D:\\sdk\\RTL87X3G_MCU_SDK_Watch_Zephyr_v1.14.3.2",
+      "vars": { "flash": "nor", "chip": "rtl8783gbf" },
+      "port": "COM33",
+      "out_dir": "D:\\soc_log\\rtl87x3g",
+      "traces": {},
+      "extra_args": []
+    }
+  }
+}

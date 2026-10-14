@@ -1,0 +1,10 @@
+{
+  "name": "debug-analyzer",
+  "version": "0.1.0",
+  "description": "Headless serial log capture and offline decoding with Realtek DebugAnalyzer (Windows).",
+  "author": {
+    "name": "Haonan Shi"
+  },
+  "repository": "https://github.com/Haonan-Shi/claude-plugins",
+  "keywords": ["realtek", "debuganalyzer", "soc-log", "rtl87x3g", "embedded"]
+}
