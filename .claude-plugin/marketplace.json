@@ -1,5 +1,5 @@
 {
-  "name": "haonan-plugins",
+  "name": "rtl-dev-plugins",
   "description": "Claude Code plugins for embedded development and debugging.",
   "owner": {
     "name": "Haonan Shi"

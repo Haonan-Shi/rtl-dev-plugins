@@ -12,13 +12,13 @@ Claude Code plugins for RTL chip development and debugging.
 
 ```
 /plugin marketplace add Haonan-Shi/rtl-dev-plugins
-/plugin install debug-analyzer@haonan-plugins
+/plugin install debug-analyzer@rtl-dev-plugins
 ```
 
 For local development, add the checkout directory instead:
 
 ```
-/plugin marketplace add C:\path\to\claude-plugins
+/plugin marketplace add C:\path\to\rtl-dev-plugins
 ```
 
 ## Layout
